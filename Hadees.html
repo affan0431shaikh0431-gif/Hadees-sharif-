@@ -1,0 +1,338 @@
+<!doctype html>
+
+<html lang="hi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>हदीस अपलोडर — सरल HTML</title>
+  <style>
+    :root{ --card:#fff; --bg:#f4f6f8; --muted:#666; --accent:#0b63d6 }
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:var(--bg);color:#111}
+    .container{max-width:900px;margin:28px auto;padding:18px}
+    header{display:flex;align-items:center;gap:12px}
+    h1{margin:0;font-size:20px}
+    .card{background:var(--card);padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(10,10,10,0.06);margin-top:14px}
+    label{display:block;margin:8px 0 6px;font-weight:600}
+    input[type="text"], textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;box-sizing:border-box}
+    textarea{min-height:110px;resize:vertical}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{display:inline-block;padding:9px 12px;border-radius:8px;border:none;background:var(--accent);color:white;cursor:pointer}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid #dbe9ff}
+    .uploads{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+    .upload-item{padding:12px;border-radius:12px;background:#fff;box-shadow:0 4px 12px rgba(10,10,10,0.04);display:flex;flex-direction:column;gap:8px}
+    .thumb{width:100%;height:160px;object-fit:cover;border-radius:8px;background:#eee}
+    .meta{font-size:13px;color:var(--muted)}
+    .actions{margin-top:auto;display:flex;gap:8px;flex-wrap:wrap}
+    small{color:var(--muted)}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    input[type="file"]{padding:6px 0}
+    .note{font-size:13px;color:var(--muted);margin-top:6px}
+    .flex-between{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect rx='8' ry='8' width='40' height='40' fill='%230b63d6'/><text x='50%' y='52%' fill='white' font-size='18' font-family='Arial' text-anchor='middle' alignment-baseline='middle'>ह</text></svg>" alt="" style="width:44px;height:44px;border-radius:8px"/>
+      <div>
+        <h1>हदीस अपलोड — सरल वेब पेज</h1>
+        <small>हदीस लिखें, तस्वीर जोड़ें और दूसरों को भी अपलोड करने का विकल्प दें।</small>
+      </div>
+    </header><div class="card" id="formCard">
+  <form id="hadeesForm">
+    <div class="row">
+      <div style="flex:1">
+        <label>आपका नाम (विकल्प)</label>
+        <input id="author" type="text" placeholder="उदा. Muhammad Ali" />
+      </div>
+      <div style="width:140px">
+        <label>तिथि (वैकल्पिक)</label>
+        <input id="date" type="text" placeholder="DD-MM-YYYY" />
+      </div>
+    </div>
+
+    <label>हदीस / पाठ</label>
+    <textarea id="text" placeholder="यहाँ हदीस लिखें..." required></textarea>
+
+    <label>छवि जोड़ें (वैकल्पिक)</label>
+    <input id="image" type="file" accept="image/*" />
+
+    <div style="margin-top:10px" class="flex-between">
+      <div class="controls">
+        <button class="btn" type="submit" id="submitBtn">हदीस अपलोड करें</button>
+        <button class="btn ghost" type="button" id="clearForm">साफ़ करें</button>
+        <button class="btn ghost" type="button" id="exportAll">Export All</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+        <button class="btn ghost" type="button" id="importBtn">Import</button>
+      </div>
+      <div>
+        <small id="statusText">ब्राउज़र में स्थानीय रूप से सहेजा गया (localStorage)।</small>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div style="margin-top:12px" class="card">
+  <div class="flex-between">
+    <strong>अपलोड की गई हदीस</strong>
+    <small id="count">0 items</small>
+  </div>
+  <div class="uploads" id="uploads"></div>
+  <div class="note">नोट: यह पेज ब्राउज़र की localStorage का उपयोग करता है — साझा करने के लिए "Share" का उपयोग करें या Export करें।</div>
+</div>
+
+  </div>  <script>
+    const LS_KEY = 'hadees_list_v1';
+    const form = document.getElementById('hadeesForm');
+    const authorEl = document.getElementById('author');
+    const dateEl = document.getElementById('date');
+    const textEl = document.getElementById('text');
+    const imageEl = document.getElementById('image');
+    const uploadsEl = document.getElementById('uploads');
+    const countEl = document.getElementById('count');
+    const statusText = document.getElementById('statusText');
+    const exportBtn = document.getElementById('exportAll');
+    const importBtn = document.getElementById('importBtn');
+    const importFile = document.getElementById('importFile');
+    const clearFormBtn = document.getElementById('clearForm');
+
+    let list = loadList();
+
+    function loadList(){
+      try {
+        const raw = localStorage.getItem(LS_KEY) || '[]';
+        return JSON.parse(raw);
+      } catch(e){
+        console.error(e);
+        return [];
+      }
+    }
+
+    function saveList(){
+      localStorage.setItem(LS_KEY, JSON.stringify(list));
+      statusText.textContent = 'ब्राउज़र में स्थानीय रूप से सहेजा गया (localStorage)।';
+      renderList();
+    }
+
+    function renderList(){
+      uploadsEl.innerHTML = '';
+      countEl.textContent = list.length + ' items';
+      if(list.length === 0){
+        uploadsEl.innerHTML = '<div style="padding:12px;color:var(--muted)">किसी ने अभी तक हदीस अपलोड नहीं की है।</div>';
+        return;
+      }
+      list.slice().reverse().forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'upload-item';
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.alt = 'thumbnail';
+        img.src = item.image || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="300"><rect width="600" height="300" fill="%23eee"/><text x="50%" y="50%" fill="%23999" font-size="20" font-family="Arial" text-anchor="middle" alignment-baseline="middle">No Image</text></svg>';
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = `<strong>${escapeHtml(item.author || 'Unknown')}</strong> · <small>${escapeHtml(item.date || '')}</small>`;
+        const content = document.createElement('div');
+        content.innerHTML = `<div style="white-space:pre-wrap;margin-top:6px">${escapeHtml(item.text)}</div>`;
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const shareBtn = document.createElement('button');
+        shareBtn.className = 'btn ghost';
+        shareBtn.textContent = 'Share';
+        shareBtn.onclick = async () => {
+          const shareText = `${item.text}\n— ${item.author || ''} ${item.date ? '(' + item.date + ')' : ''}`;
+          if(navigator.share){
+            try{
+              const files = [];
+              if(item.image_blob){
+                const blob = dataURLToBlob(item.image_blob);
+                files.push(new File([blob], 'image.jpg', {type: blob.type}));
+              }
+              await navigator.share({title: 'Hadees', text: shareText, files: files.length?files:undefined});
+            }catch(err){
+              alert('Share failed: ' + err);
+            }
+          } else {
+            await copyToClipboard(shareText);
+            alert('हदीस क्लिपबोर्ड में कॉपी कर दी गई है। WhatsApp/Telegram में पेस्ट करें।');
+          }
+        };
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn ghost';
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => {
+          authorEl.value = item.author || '';
+          dateEl.value = item.date || '';
+          textEl.value = item.text || '';
+          if(item.image_blob){
+            alert('इस एंट्री में पहले से एक इमेज है। यदि आप इसे बदलना चाहते हैं तो नया इमेज चुनें।');
+          }
+          form.dataset.editId = item.id;
+          document.getElementById('submitBtn').textContent = 'परिवर्तन सहेजें';
+          window.scrollTo({top:0,behavior:'smooth'});
+        };
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn';
+        delBtn.style.background = '#d9534f';
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = () => {
+          if(confirm('क्या आप इस हदीस को हटाना चाहते हैं?')) {
+            list = list.filter(x => x.id !== item.id);
+            saveList();
+          }
+        };
+
+        const downBtn = document.createElement('button');
+        downBtn.className = 'btn ghost';
+        downBtn.textContent = 'Download';
+        downBtn.onclick = () => {
+          const blob = new Blob([JSON.stringify(item, null, 2)], {type:'application/json'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `hadees_${(item.id||Date.now())}.json`; a.click();
+          URL.revokeObjectURL(url);
+        };
+
+        actions.appendChild(shareBtn);
+        actions.appendChild(editBtn);
+        actions.appendChild(downBtn);
+        actions.appendChild(delBtn);
+
+        div.appendChild(img);
+        div.appendChild(meta);
+        div.appendChild(content);
+        div.appendChild(actions);
+        uploadsEl.appendChild(div);
+      });
+    }
+
+    function escapeHtml(s){
+      if(!s) return '';
+      return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    }
+
+    function dataURLToBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while(n--) u8arr[n] = bstr.charCodeAt(n);
+      return new Blob([u8arr], {type:mime});
+    }
+
+    async function copyToClipboard(text){
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        return navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+      }
+    }
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const author = authorEl.value.trim() || 'Anonymous';
+      const date = dateEl.value.trim();
+      const text = textEl.value.trim();
+      if(!text){
+        alert('कृपया हदीस / पाठ भरें।');
+        return;
+      }
+      let imageData = null;
+      if(imageEl.files && imageEl.files[0]){
+        imageData = await fileToDataURL(imageEl.files[0]);
+      }
+      const editId = form.dataset.editId;
+      if(editId){
+        const idx = list.findIndex(x => x.id == editId);
+        if(idx !== -1){
+          list[idx].author = author;
+          list[idx].date = date;
+          list[idx].text = text;
+          if(imageData) list[idx].image = imageData;
+          if(imageData) list[idx].image_blob = imageData;
+          delete form.dataset.editId;
+          document.getElementById('submitBtn').textContent = 'हदीस अपलोड करें';
+        }
+      } else {
+        const item = {
+          id: 'h' + Date.now() + Math.random().toString(36).slice(2,8),
+          author, date, text,
+          image: imageData || null,
+          image_blob: imageData || null,
+          createdAt: new Date().toISOString()
+        };
+        list.push(item);
+      }
+      imageEl.value = '';
+      authorEl.value = '';
+      dateEl.value = '';
+      textEl.value = '';
+      saveList();
+    });
+
+    clearFormBtn.addEventListener('click', () => {
+      authorEl.value = ''; dateEl.value = ''; textEl.value = ''; imageEl.value = ''; delete form.dataset.editId;
+      document.getElementById('submitBtn').textContent = 'हदीस अपलोड करें';
+    });
+
+    function fileToDataURL(file){
+      return new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(file);
+      });
+    }
+
+    exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(list, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `hadees_backup_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    importBtn.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if(!f) return;
+      try{
+        const txt = await f.text();
+        const arr = JSON.parse(txt);
+        if(!Array.isArray(arr)) throw new Error('Invalid file (not array).');
+        const existingIds = new Set(list.map(x=>x.id));
+        for(const it of arr){
+          if(!it.id) it.id = 'h' + Date.now() + Math.random().toString(36).slice(2,8);
+          if(!existingIds.has(it.id)) list.push(it);
+        }
+        saveList();
+        alert('Import complete.');
+      }catch(err){
+        alert('Import failed: ' + err.message);
+      } finally {
+        importFile.value = '';
+      }
+    });
+
+    renderList();
+    window.addEventListener('beforeunload', () => {
+      localStorage.setItem(LS_KEY, JSON.stringify(list));
+    });
+  </script></body>
+</html>
+<script type="text/javascript">
+	atOptions = {
+		'key' : '97b63aefff84063c6b7aef79fe4deeb5',
+		'format' : 'iframe',
+		'height' : 60,
+		'width' : 468,
+		'params' : {}
+	};
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/97b63aefff84063c6b7aef79fe4deeb5/invoke.js"></script>
